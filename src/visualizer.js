@@ -324,26 +324,41 @@ export class Visualizer {
     // Set a background from an HTMLImageElement. Places it behind the scene.
     setBackgroundImage(image) {
         if (!image) return;
-        if (this.backgroundTexture) {
-            this.backgroundTexture.dispose();
-            this.backgroundTexture = null;
-        }
 
-        const texture = new THREE.Texture(image);
-        texture.needsUpdate = true;
-        texture.minFilter = THREE.LinearFilter;
-        this.backgroundTexture = texture;
-        this.scene.background = texture;
+        // Use the canvas element's CSS background for a true "cover" behavior
+        // and make the WebGL canvas transparent so the CSS background shows through.
+        try {
+            this.canvas.style.backgroundImage = `url(${image.src})`;
+            this.canvas.style.backgroundSize = 'cover';
+            this.canvas.style.backgroundPosition = 'center center';
+            this.canvas.style.backgroundRepeat = 'no-repeat';
+
+            // Make renderer clear transparent so CSS background is visible.
+            this.renderer.setClearColor(0x000000, 0);
+
+            // Keep a reference in case we want to dispose or clear later.
+            this.backgroundTexture = image;
+        } catch (e) {
+            console.warn('Failed to apply CSS background cover:', e);
+        }
     }
 
     // Clear any background image and restore palette-based background
     clearBackground() {
-        if (this.backgroundTexture) {
-            this.backgroundTexture.dispose();
-            this.backgroundTexture = null;
+        // Remove CSS background and restore WebGL clear color
+        try {
+            if (this.canvas && this.canvas.style) {
+                this.canvas.style.backgroundImage = '';
+                this.canvas.style.backgroundSize = '';
+                this.canvas.style.backgroundPosition = '';
+                this.canvas.style.backgroundRepeat = '';
+            }
+        } catch (e) {
+            console.warn('Failed to clear CSS background:', e);
         }
-        this.scene.background = null;
-        // Reset clear color and fog to match current palette
+
+        this.backgroundTexture = null;
+        // Reset clear color and fog to match current palette (opaque)
         this.setPalette(this.currentPalette);
     }
 }
