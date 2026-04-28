@@ -33,6 +33,7 @@ export class Visualizer {
             ocean: [0.55, 0.6, 0.5, 0.65, 0.45, 0.7, 0.58] // Deep blue, Seafoam, Teal
         };
         this.currentPalette = 'neon';
+        this.backgroundTexture = null;
     }
     
     setPalette(name) {
@@ -318,5 +319,31 @@ export class Visualizer {
         });
 
         this.renderer.render(this.scene, this.camera);
+    }
+
+    // Set a background from an HTMLImageElement. Places it behind the scene.
+    setBackgroundImage(image) {
+        if (!image) return;
+        if (this.backgroundTexture) {
+            this.backgroundTexture.dispose();
+            this.backgroundTexture = null;
+        }
+
+        const texture = new THREE.Texture(image);
+        texture.needsUpdate = true;
+        texture.minFilter = THREE.LinearFilter;
+        this.backgroundTexture = texture;
+        this.scene.background = texture;
+    }
+
+    // Clear any background image and restore palette-based background
+    clearBackground() {
+        if (this.backgroundTexture) {
+            this.backgroundTexture.dispose();
+            this.backgroundTexture = null;
+        }
+        this.scene.background = null;
+        // Reset clear color and fog to match current palette
+        this.setPalette(this.currentPalette);
     }
 }

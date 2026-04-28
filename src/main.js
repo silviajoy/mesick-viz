@@ -22,6 +22,10 @@ const timeTotal = document.getElementById('time-total');
 const paletteSelect = document.getElementById('palette-select');
 const screenSizeSelect = document.getElementById('screen-size');
 
+// Background controls
+const bgInput = document.getElementById('bg-input');
+const bgClearBtn = document.getElementById('bg-clear-btn');
+
 const canvas = document.getElementById('visualizer-canvas');
 
 let audioEngine = new AudioVisualizerEngine();
@@ -55,6 +59,28 @@ stemsInput.addEventListener('change', () => {
 
 trackInput.addEventListener('change', () => {
     playTrackBtn.disabled = trackInput.files.length === 0;
+});
+
+// Background image import
+bgInput.addEventListener('change', () => {
+    const file = bgInput.files && bgInput.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+            visualizer.setBackgroundImage(img);
+            bgClearBtn.disabled = false;
+        };
+        img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+});
+
+bgClearBtn.addEventListener('click', () => {
+    visualizer.clearBackground();
+    bgInput.value = '';
+    bgClearBtn.disabled = true;
 });
 
 // Start loop
