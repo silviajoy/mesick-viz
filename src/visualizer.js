@@ -49,7 +49,8 @@ export class Visualizer {
             if (name === 'fire') bgColor = 0x0c0105; // fire (dark maroon/plum contrast)
             else if (name === 'ocean') bgColor = 0x050110; // ocean (deep cool space blue/purple contrast)
 
-            this.renderer.setClearColor(bgColor);
+            const hasBackgroundImage = !!this.backgroundTexture;
+            this.renderer.setClearColor(bgColor, hasBackgroundImage ? 0 : 1);
             this.scene.fog.color.setHex(bgColor);
             
             // Reassign hues per shape pool to map pitch -> palette logic
@@ -63,9 +64,8 @@ export class Visualizer {
                 });
             });
             // If a background image is currently applied via CSS, update the veil color
-            if (this.backgroundTexture && this.canvas && this.canvas.style) {
-                const src = this.backgroundTexture.src;
-                this._applyVeilStyle(src);
+            if (hasBackgroundImage && this.canvas && this.canvas.style) {
+                this._applyVeilStyle(this.backgroundTexture.src);
             }
         }
     }
