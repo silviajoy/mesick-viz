@@ -35,9 +35,9 @@ export class Visualizer {
         this.currentPalette = 'neon';
         this.backgroundTexture = null;
         this.veilColors = {
-            neon: 'rgba(48,8,64,0.36)',
-            fire: 'rgba(80,16,8,0.40)',
-            ocean: 'rgba(6,30,80,0.34)'
+            neon: 'rgba(48,8,64,0.7)',
+            fire: 'rgba(80,16,8,0.8)',
+            ocean: 'rgba(6,30,80,0.7)'
         };
     }
     
@@ -119,15 +119,28 @@ export class Visualizer {
         const texture = new THREE.CanvasTexture(canvas);
         const cloudGeo = new THREE.PlaneGeometry(400, 400);
         const cloudMaterial = new THREE.MeshLambertMaterial({
-            map: texture, transparent: true, opacity: 0.6, color: 0x666688,
+                    map: texture, transparent: true, opacity: 0.6, color: 0x666688,
             depthWrite: false, blending: THREE.AdditiveBlending
         });
 
+                const cloudColumns = 9;
+                const cloudRows = 5;
+                const xStep = 800 / (cloudColumns - 1);
+                const yStep = 300 / (cloudRows - 1);
+
         for (let p = 0; p < 45; p++) {
             const cloud = new THREE.Mesh(cloudGeo, cloudMaterial);
-            cloud.position.set(Math.random() * 800 - 400, Math.random() * 300 - 50, Math.random() * 500 - 350);
+                    const column = p % cloudColumns;
+                    const row = Math.floor(p / cloudColumns) % cloudRows;
+                    const centeredX = -400 + (column * xStep);
+                    const centeredY = -50 + (row * yStep);
+                    const jitterX = (Math.random() * 50) - 25;
+                    const jitterY = (Math.random() * 30) - 15;
+                    const jitterZ = (Math.random() * 80) - 40;
+
+                    cloud.position.set(centeredX + jitterX, centeredY + jitterY, -350 + (row * 50) + jitterZ);
             cloud.rotation.x = 1.16; cloud.rotation.y = -0.12; cloud.rotation.z = Math.random() * 2 * Math.PI;
-            cloud.material.opacity = 0.55;
+                    cloud.material.opacity = 0.38;
             this.cloudParticles.push(cloud);
             this.scene.add(cloud);
         }
