@@ -63,6 +63,25 @@ export class Visualizer {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
+        
+        const isMobile = width < height;
+        
+        // Rethink the spatial orientation of elements based on aspect ratio
+        if (this.shapePools) {
+            this.shapePools.forEach((pool) => {
+                pool.forEach(s => {
+                    if (isMobile) {
+                        s.baseX = Math.random() * 300 - 150; // Narrow horizontal
+                        s.baseY = Math.random() * 800 - 300; // Tall vertical
+                        s.baseZ = Math.random() * 600 - 300;
+                    } else {
+                        s.baseX = Math.random() * 800 - 400; // Wide horizontal
+                        s.baseY = Math.random() * 400 - 150; // Normal vertical
+                        s.baseZ = Math.random() * 600 - 300;
+                    }
+                });
+            });
+        }
     }
 
     initClouds() {
@@ -181,7 +200,6 @@ export class Visualizer {
         for (let poolIdx = 0; poolIdx < 12; poolIdx++) {
             const pool = [];
             const hue = poolIdx / 12;
-            const useBlob = true; // Force all to use full 3D organic meshes
             
             for(let i=0; i<25; i++) {
                 let mesh;
@@ -202,7 +220,7 @@ export class Visualizer {
                 
                 this.scene.add(mesh);
                 pool.push({
-                    mesh, useBlob, 
+                    mesh,
                     baseX: mesh.position.x, baseY: mesh.position.y, baseZ: mesh.position.z,
                     baseScale, 
                     offset: Math.random() * Math.PI * 2, 
@@ -266,39 +284,34 @@ export class Visualizer {
                 // Color intensity shift based on audio
                 s.mesh.material.color.setHSL(s.hue, 1.0, 0.45 + (intenseVal * 0.55));
 
-                if (s.useBlob) {
-                    // Blob vertex morphing purely driven by frequency
-                    const geo = s.mesh.geometry;
-                    const posAttribute = geo.attributes.position;
-                    const original = geo.userData.originalVertices;
+                // Blob vertex morphing purely driven by frequency
+                const geo = s.mesh.geometry;
+                const posAttribute = geo.attributes.position;
+                const original = geo.userData.originalVertices;
+                
+                for (let i = 0; i < posAttribute.count; i++) {
+                    const origVert = original[i];
                     
-                    for (let i = 0; i < posAttribute.count; i++) {
-                        const origVert = original[i];
-                        
-                        // Calculate a direction vector from center
-                        const dir = origVert.clone().normalize();
-                        
-                        // Push vertex outward drastically if music is loud
-                        const push = intenseVal * 4 + (Math.sin(time * 5 + i + s.noiseSeed) * intenseVal * 2);
-                        
-                        posAttribute.setXYZ(
-                            i,
-                            origVert.x + dir.x * push,
-                            origVert.y + dir.y * push,
-                            origVert.z + dir.z * push
-                        );
-                    }
-                    posAttribute.needsUpdate = true;
-                    // Scale whole blob based on music hit
-                    const pulse = 1 + (intenseVal * 5);
-                    const size = s.baseScale * pulse;
-                    s.mesh.scale.set(size, size, size);
-                } else {
-                    // Sprites just pulse in scale aggressively
-                    const pulse = 1 + (intenseVal * 8);
-                    const size = s.baseScale * pulse;
-                    s.mesh.scale.set(size, size, 1);
+                    // Calculate a direction vector from center
+                    const dir = origVert.clone().normalize();
+                    
+                    // Push vertex outward drastically if music is loud
+                    const push = intenseVal * 4 + (Math.sin(time * 5 + i + s.noiseSeed) * intenseVal * 2);
+                    
+                    posAttribute.setXYZ(
+                        i,
+                        origVert.x + dir.x * push,
+                        origVert.y + dir.y * push,
+                        origVert.z + dir.z * push
+                    );
                 }
+                
+                posAttribute.needsUpdate = true;
+                
+                // Scale whole shape based on music hit
+                const pulse = 1 + (intenseVal * 5);
+                const size = s.baseScale * pulse;
+                s.mesh.scale.set(size, size, size);
                 
                 s.mesh.material.opacity = 0.1 + (intenseVal * 0.9);
             });

@@ -6,13 +6,14 @@ export class Recorder {
 
     start(canvas, audioDestinationStream) {
         this.recordedChunks = [];
-        const canvasStream = canvas.captureStream(60); // 60 FPS
+        this.canvasStream = canvas.captureStream(60); // 60 FPS
         
         // Combine canvas video track + audio track
         const combinedStream = new MediaStream();
-        canvasStream.getVideoTracks().forEach(track => combinedStream.addTrack(track));
+        this.canvasStream.getVideoTracks().forEach(track => combinedStream.addTrack(track));
         if (audioDestinationStream) {
-            audioDestinationStream.getAudioTracks().forEach(track => combinedStream.addTrack(track));
+            const stream = audioDestinationStream.stream || audioDestinationStream;
+            stream.getAudioTracks().forEach(track => combinedStream.addTrack(track));
         }
 
         // Check supported mimetypes. WebM is usually best supported in browsers for recording
@@ -41,6 +42,13 @@ export class Recorder {
                 const blob = new Blob(this.recordedChunks, {
                     type: 'video/webm'
                 });
+                
+                // Cleanup canvas stream tracks to prevent memory leaks over multiple recordings
+                if (this.canvasStream) {
+                    this.canvasStream.getTracks().forEach(t => t.stop());
+                    this.canvasStream = null;
+                }
+                
                 resolve(blob);
             };
             

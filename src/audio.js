@@ -37,6 +37,36 @@ export class AudioVisualizerEngine {
         return analyser;
     }
 
+    _setupEQAndRouting(masterNode) {
+        const createFilter = (type, freq) => {
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = type;
+            filter.frequency.value = freq;
+            if (type === 'bandpass') filter.Q.value = 1;
+            return filter;
+        };
+
+        const setupBand = (key, type, freq) => {
+            const filter = createFilter(type, freq);
+            masterNode.connect(filter);
+            
+            this.analysers[key] = this.createAnalyser();
+            this.dataArrays[key] = new Uint8Array(this.analysers[key].frequencyBinCount);
+            filter.connect(this.analysers[key]);
+            
+            // Store filter for proper cleanup later
+            if (!this.filters) this.filters = [];
+            this.filters.push(filter);
+        };
+
+        setupBand('lows', 'lowpass', 250);
+        setupBand('mids', 'bandpass', 1000);
+        setupBand('highs', 'highpass', 4000);
+
+        masterNode.connect(this.ctx.destination);
+        masterNode.connect(this.destinationStream);
+    }
+
     _resetAnalysers() {
         ['lows', 'mids', 'highs'].forEach(key => {
             if (this.analysers[key]) {
@@ -44,6 +74,10 @@ export class AudioVisualizerEngine {
                 this.analysers[key] = null;
             }
         });
+        if (this.filters) {
+            this.filters.forEach(f => f.disconnect());
+            this.filters = [];
+        }
         this.stemAnalysers.forEach(a => a && a.disconnect());
         this.stemAnalysers = [];
         this.stemDataArrays = [];
@@ -60,21 +94,7 @@ export class AudioVisualizerEngine {
         this.duration = Math.max(...this.buffers.map(b => b ? b.duration : 0));
         
         const masterGain = this.ctx.createGain();
-        
-        const lowpass = this.ctx.createBiquadFilter(); lowpass.type = 'lowpass'; lowpass.frequency.value = 250;
-        this.analysers.lows = this.createAnalyser(); this.dataArrays.lows = new Uint8Array(this.analysers.lows.frequencyBinCount);
-        masterGain.connect(lowpass); lowpass.connect(this.analysers.lows);
-        
-        const bandpass = this.ctx.createBiquadFilter(); bandpass.type = 'bandpass'; bandpass.frequency.value = 1000; bandpass.Q.value = 1;
-        this.analysers.mids = this.createAnalyser(); this.dataArrays.mids = new Uint8Array(this.analysers.mids.frequencyBinCount);
-        masterGain.connect(bandpass); bandpass.connect(this.analysers.mids);
-        
-        const highpass = this.ctx.createBiquadFilter(); highpass.type = 'highpass'; highpass.frequency.value = 4000;
-        this.analysers.highs = this.createAnalyser(); this.dataArrays.highs = new Uint8Array(this.analysers.highs.frequencyBinCount);
-        masterGain.connect(highpass); highpass.connect(this.analysers.highs);
-
-        masterGain.connect(this.ctx.destination);
-        masterGain.connect(this.destinationStream);
+        this._setupEQAndRouting(masterGain);
         
         this.buffers.forEach((buffer, index) => {
             const analyser = this.createAnalyser();
@@ -98,25 +118,8 @@ export class AudioVisualizerEngine {
         this.buffers = [buffer];
         this.duration = buffer.duration;
         
-        const lowpass = this.ctx.createBiquadFilter(); lowpass.type = 'lowpass'; lowpass.frequency.value = 250;
-        this.analysers.lows = this.createAnalyser(); this.dataArrays.lows = new Uint8Array(this.analysers.lows.frequencyBinCount);
-        lowpass.connect(this.analysers.lows);
-        
-        const bandpass = this.ctx.createBiquadFilter(); bandpass.type = 'bandpass'; bandpass.frequency.value = 1000; bandpass.Q.value = 1;
-        this.analysers.mids = this.createAnalyser(); this.dataArrays.mids = new Uint8Array(this.analysers.mids.frequencyBinCount);
-        bandpass.connect(this.analysers.mids);
-        
-        const highpass = this.ctx.createBiquadFilter(); highpass.type = 'highpass'; highpass.frequency.value = 4000;
-        this.analysers.highs = this.createAnalyser(); this.dataArrays.highs = new Uint8Array(this.analysers.highs.frequencyBinCount);
-        highpass.connect(this.analysers.highs);
-
         const splitterGain = this.ctx.createGain();
-        splitterGain.connect(lowpass);
-        splitterGain.connect(bandpass);
-        splitterGain.connect(highpass);
-        
-        splitterGain.connect(this.ctx.destination);
-        splitterGain.connect(this.destinationStream);
+        this._setupEQAndRouting(splitterGain);
         
         this.inputNodes = [splitterGain];
     }
