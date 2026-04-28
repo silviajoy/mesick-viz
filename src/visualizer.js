@@ -34,6 +34,11 @@ export class Visualizer {
         };
         this.currentPalette = 'neon';
         this.backgroundTexture = null;
+        this.veilColors = {
+            neon: 'rgba(48,8,64,0.36)',
+            fire: 'rgba(80,16,8,0.40)',
+            ocean: 'rgba(6,30,80,0.34)'
+        };
     }
     
     setPalette(name) {
@@ -57,6 +62,11 @@ export class Visualizer {
                     s.hue = mappedHue;
                 });
             });
+            // If a background image is currently applied via CSS, update the veil color
+            if (this.backgroundTexture && this.canvas && this.canvas.style) {
+                const src = this.backgroundTexture.src;
+                this._applyVeilStyle(src);
+            }
         }
     }
     
@@ -324,23 +334,27 @@ export class Visualizer {
     // Set a background from an HTMLImageElement. Places it behind the scene.
     setBackgroundImage(image) {
         if (!image) return;
-
         // Use the canvas element's CSS background for a true "cover" behavior
         // and make the WebGL canvas transparent so the CSS background shows through.
         try {
-            this.canvas.style.backgroundImage = `url(${image.src})`;
-            this.canvas.style.backgroundSize = 'cover';
-            this.canvas.style.backgroundPosition = 'center center';
-            this.canvas.style.backgroundRepeat = 'no-repeat';
-
-            // Make renderer clear transparent so CSS background is visible.
-            this.renderer.setClearColor(0x000000, 0);
-
-            // Keep a reference in case we want to dispose or clear later.
             this.backgroundTexture = image;
+            this._applyVeilStyle(image.src);
+
+            // Make renderer clear transparent so CSS background + veil are visible.
+            this.renderer.setClearColor(0x000000, 0);
         } catch (e) {
             console.warn('Failed to apply CSS background cover:', e);
         }
+    }
+
+    _applyVeilStyle(imageSrc) {
+        if (!this.canvas || !this.canvas.style) return;
+        const veil = this.veilColors[this.currentPalette] || 'rgba(0,0,0,0.3)';
+        // Use linear-gradient as a uniform veil over the image. The first layer is the veil.
+        this.canvas.style.backgroundImage = `linear-gradient(${veil}, ${veil}), url(${imageSrc})`;
+        this.canvas.style.backgroundSize = 'cover';
+        this.canvas.style.backgroundPosition = 'center center';
+        this.canvas.style.backgroundRepeat = 'no-repeat';
     }
 
     // Clear any background image and restore palette-based background
