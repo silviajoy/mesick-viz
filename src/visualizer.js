@@ -28,34 +28,37 @@ export class Visualizer {
         this.initOrganicShapes();
         
         this.palettes = {
-            neon: [0.8, 0.9, 0.6, 0.4, 0.1, 0.2, 0.3], // Purple, Pink, Blue, Cyan
-            fire: [0.0, 0.05, 0.1, 0.12, 0.15, 0.02, 0.08], // Red, Orange, Gold, Yellow
-            ocean: [0.55, 0.6, 0.5, 0.65, 0.45, 0.7, 0.58] // Deep blue, Seafoam, Teal
+            neon: { hues: [0.8, 0.9, 0.6, 0.4, 0.1, 0.2, 0.3], bgColor: 0x050015, veil: 'rgba(48,8,64,0.7)' },
+            fire: { hues: [0.0, 0.05, 0.1, 0.12, 0.15, 0.02, 0.08], bgColor: 0x0c0105, veil: 'rgba(80,16,8,0.8)' },
+            ocean: { hues: [0.55, 0.6, 0.5, 0.65, 0.45, 0.7, 0.58], bgColor: 0x050110, veil: 'rgba(6,30,80,0.7)' },
+            aurora: { hues: [0.42, 0.48, 0.55, 0.62, 0.38, 0.72, 0.58], bgColor: 0x020915, veil: 'rgba(10,42,48,0.72)' },
+            sunset: { hues: [0.02, 0.05, 0.09, 0.14, 0.92, 0.98, 0.11], bgColor: 0x150806, veil: 'rgba(72,24,12,0.74)' },
+            mono: { hues: [0.0, 0.02, 0.04, 0.08, 0.14, 0.18, 0.22], bgColor: 0x06070a, veil: 'rgba(18,18,24,0.72)' },
+            acid: { hues: [0.2, 0.25, 0.3, 0.33, 0.36, 0.42, 0.45], bgColor: 0x07110b, veil: 'rgba(18,60,20,0.72)' }
         };
         this.currentPalette = 'neon';
         this.backgroundTexture = null;
-        this.veilColors = {
-            neon: 'rgba(48,8,64,0.7)',
-            fire: 'rgba(80,16,8,0.8)',
-            ocean: 'rgba(6,30,80,0.7)'
+        this.shapeStyles = {
+            spikey: { displacement: 1.35, morph: 2.5, scale: 1.05, opacity: 1.0, wobble: 2.0, jitter: 0.85, shade: 0.10 },
+            fluid: { displacement: 0.72, morph: 1.0, scale: 0.85, opacity: 0.68, wobble: 0.75, jitter: 0.18, shade: 0.04 },
+            unstable: { displacement: 1.55, morph: 1.55, scale: 1.0, opacity: 0.86, wobble: 3.0, jitter: 1.25, shade: 0.16 },
+            crystalline: { displacement: 0.95, morph: 1.8, scale: 0.92, opacity: 0.9, wobble: 0.55, jitter: 0.24, shade: 0.08 }
         };
+        this.currentShapeStyle = 'spikey';
     }
     
     setPalette(name) {
-        if (this.palettes[name]) {
+        const palette = this.palettes[name];
+        if (palette) {
             this.currentPalette = name;
-            
-            let bgColor = 0x050015; // neon (dark violet/blue contrast)
-            if (name === 'fire') bgColor = 0x0c0105; // fire (dark maroon/plum contrast)
-            else if (name === 'ocean') bgColor = 0x050110; // ocean (deep cool space blue/purple contrast)
 
             const hasBackgroundImage = !!this.backgroundTexture;
-            this.renderer.setClearColor(bgColor, hasBackgroundImage ? 0 : 1);
-            this.scene.fog.color.setHex(bgColor);
+            this.renderer.setClearColor(palette.bgColor, hasBackgroundImage ? 0 : 1);
+            this.scene.fog.color.setHex(palette.bgColor);
             
             // Reassign hues per shape pool to map pitch -> palette logic
             this.shapePools.forEach((pool, index) => {
-                const paletteHues = this.palettes[this.currentPalette];
+                const paletteHues = palette.hues;
                 // Lower pitch stems to the beginning of the palette, higher to the end
                 const mappedHue = paletteHues[index % paletteHues.length];
                 
@@ -67,6 +70,12 @@ export class Visualizer {
             if (hasBackgroundImage && this.canvas && this.canvas.style) {
                 this._applyVeilStyle(this.backgroundTexture.src);
             }
+        }
+    }
+
+    setShapeStyle(name) {
+        if (this.shapeStyles[name]) {
+            this.currentShapeStyle = name;
         }
     }
     
@@ -282,6 +291,7 @@ export class Visualizer {
         
         this.shapePools.forEach((pool, poolIdx) => {
             const isActive = poolIdx < activeValues.length;
+            const style = this.shapeStyles[this.currentShapeStyle] || this.shapeStyles.spikey;
             
             // To make reactivity obvious, we square the value.
             // Smoothing makes it look organic instead of robotic/jittery
@@ -300,13 +310,15 @@ export class Visualizer {
                 if (!isActive) return;
 
                 // Lock base position with strong displacement based ONLY on music volume
-                const displacement = intenseVal * 100;
-                s.mesh.position.y = s.baseY + (Math.sin(time + s.offset) * displacement);
-                s.mesh.position.x = s.baseX + (Math.cos(time * 0.8 + s.offset) * displacement);
-                s.mesh.position.z = s.baseZ + (Math.sin(time * 1.2 + s.offset) * displacement);
+                const displacement = intenseVal * 100 * style.displacement;
+                s.mesh.position.y = s.baseY + (Math.sin((time * style.wobble) + s.offset) * displacement);
+                s.mesh.position.x = s.baseX + (Math.cos((time * 0.8 * style.wobble) + s.offset) * displacement);
+                s.mesh.position.z = s.baseZ + (Math.sin((time * 1.2 * style.wobble) + s.offset) * displacement);
+                s.mesh.position.x += (Math.sin(time * 2.4 + s.noiseSeed) * style.jitter * intenseVal * 20);
+                s.mesh.position.y += (Math.cos(time * 2.0 + s.noiseSeed) * style.jitter * intenseVal * 15);
                 
                 // Color intensity shift based on audio
-                s.mesh.material.color.setHSL(s.hue, 1.0, 0.45 + (intenseVal * 0.55));
+                s.mesh.material.color.setHSL(s.hue, 1.0, 0.45 + (intenseVal * 0.55) + style.shade);
 
                 // Blob vertex morphing purely driven by frequency
                 const geo = s.mesh.geometry;
@@ -320,7 +332,10 @@ export class Visualizer {
                     const dir = origVert.clone().normalize();
                     
                     // Push vertex outward drastically if music is loud
-                    const push = intenseVal * 4 + (Math.sin(time * 5 + i + s.noiseSeed) * intenseVal * 2);
+                    const spike = style.displacement * 0.25;
+                    const wobble = Math.sin((time * 5 * style.wobble) + i + s.noiseSeed) * intenseVal * (1 + style.morph * 0.8);
+                    const pulse = intenseVal * style.morph * 2.5;
+                    const push = pulse + (wobble * style.morph) + (dir.x + dir.y + dir.z) * spike;
                     
                     posAttribute.setXYZ(
                         i,
@@ -333,11 +348,11 @@ export class Visualizer {
                 posAttribute.needsUpdate = true;
                 
                 // Scale whole shape based on music hit
-                const pulse = 1 + (intenseVal * 5);
+                const pulse = 1 + (intenseVal * 5 * style.scale);
                 const size = s.baseScale * pulse;
                 s.mesh.scale.set(size, size, size);
                 
-                s.mesh.material.opacity = 0.1 + (intenseVal * 0.9);
+                s.mesh.material.opacity = Math.max(0.08, Math.min(1, style.opacity * (0.12 + (intenseVal * 0.88))));
             });
         });
 
@@ -362,7 +377,8 @@ export class Visualizer {
 
     _applyVeilStyle(imageSrc) {
         if (!this.canvas || !this.canvas.style) return;
-        const veil = this.veilColors[this.currentPalette] || 'rgba(0,0,0,0.3)';
+        const palette = this.palettes[this.currentPalette];
+        const veil = (palette && palette.veil) || 'rgba(0,0,0,0.3)';
         // Use linear-gradient as a uniform veil over the image. The first layer is the veil.
         this.canvas.style.backgroundImage = `linear-gradient(${veil}, ${veil}), url(${imageSrc})`;
         this.canvas.style.backgroundSize = 'cover';

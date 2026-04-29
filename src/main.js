@@ -20,6 +20,7 @@ const timeCurrent = document.getElementById('time-current');
 const timeTotal = document.getElementById('time-total');
 
 const paletteSelect = document.getElementById('palette-select');
+const shapeStyleSelect = document.getElementById('shape-style-select');
 const screenSizeSelect = document.getElementById('screen-size');
 
 // Background controls
@@ -35,12 +36,22 @@ let animationId = null;
 let currentBlob = null;
 let isRecording = false;
 
+function resetPlaybackUi() {
+    playbackControls.style.display = 'none';
+    uiContainer.querySelectorAll('button').forEach(btn => btn.disabled = false);
+}
+
 // Init palette
 visualizer.setPalette(paletteSelect.value);
+visualizer.setShapeStyle(shapeStyleSelect.value);
 
 // Input listeners
 paletteSelect.addEventListener('change', (e) => {
     visualizer.setPalette(e.target.value);
+});
+
+shapeStyleSelect.addEventListener('change', (e) => {
+    visualizer.setShapeStyle(e.target.value);
 });
 
 screenSizeSelect.addEventListener('change', (e) => {
@@ -100,6 +111,7 @@ function renderLoop() {
             playPauseBtn.innerText = "Play";
             seekBar.value = 0;
             timeCurrent.innerText = "0:00";
+            resetPlaybackUi();
         }
     }
 }
@@ -174,9 +186,8 @@ stopBtn.addEventListener('click', async () => {
         recordBtn.textContent = "Start Recording";
         downloadBtn.disabled = !currentBlob;
     }
-    
-    playbackControls.style.display = 'none';
-    uiContainer.querySelectorAll('button').forEach(btn => btn.disabled = false);
+
+    resetPlaybackUi();
 });
 
 recordBtn.addEventListener('click', async () => {

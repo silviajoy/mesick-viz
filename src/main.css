@@ -18,7 +18,7 @@ canvas {
 }
 
 canvas.phone-mode {
-    width: 375px !important;
+    width: 376px !important;
     height: 812px !important;
     position: absolute;
     left: 50%;
