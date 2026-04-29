@@ -6,9 +6,14 @@ export class Visualizer {
         this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setClearColor(0x020205);
+        this.renderer.autoClear = false;
         
         this.scene = new THREE.Scene();
         this.scene.fog = new THREE.FogExp2(0x020205, 0.002);
+        this.backgroundScene = new THREE.Scene();
+        const initialAspect = window.innerWidth / window.innerHeight;
+        this.backgroundCamera = new THREE.OrthographicCamera(-initialAspect, initialAspect, 1, -1, 0, 10);
+        this.backgroundCamera.position.z = 1;
         
         this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 1000);
         this.camera.position.z = 200;
@@ -28,16 +33,19 @@ export class Visualizer {
         this.initOrganicShapes();
         
         this.palettes = {
-            neon: { hues: [0.8, 0.9, 0.6, 0.4, 0.1, 0.2, 0.3], bgColor: 0x050015, veil: 'rgba(48,8,64,0.7)' },
-            fire: { hues: [0.0, 0.05, 0.1, 0.12, 0.15, 0.02, 0.08], bgColor: 0x0c0105, veil: 'rgba(80,16,8,0.8)' },
-            ocean: { hues: [0.55, 0.6, 0.5, 0.65, 0.45, 0.7, 0.58], bgColor: 0x050110, veil: 'rgba(6,30,80,0.7)' },
-            aurora: { hues: [0.42, 0.48, 0.55, 0.62, 0.38, 0.72, 0.58], bgColor: 0x020915, veil: 'rgba(10,42,48,0.72)' },
-            sunset: { hues: [0.02, 0.05, 0.09, 0.14, 0.92, 0.98, 0.11], bgColor: 0x150806, veil: 'rgba(72,24,12,0.74)' },
-            mono: { hues: [0.0, 0.02, 0.04, 0.08, 0.14, 0.18, 0.22], bgColor: 0x06070a, veil: 'rgba(18,18,24,0.72)' },
-            acid: { hues: [0.2, 0.25, 0.3, 0.33, 0.36, 0.42, 0.45], bgColor: 0x07110b, veil: 'rgba(18,60,20,0.72)' }
+            neon: { hues: [0.8, 0.9, 0.6, 0.4, 0.1, 0.2, 0.3], bgColor: 0x050015, veil: 'rgba(48,8,64,0.6)' },
+            fire: { hues: [0.0, 0.05, 0.1, 0.12, 0.15, 0.02, 0.08], bgColor: 0x0c0105, veil: 'rgba(80,16,8,0.7)' },
+            ocean: { hues: [0.55, 0.6, 0.5, 0.65, 0.45, 0.7, 0.58], bgColor: 0x050110, veil: 'rgba(7, 21, 52, 0.6)' },
+            aurora: { hues: [0.42, 0.48, 0.55, 0.62, 0.38, 0.72, 0.58], bgColor: 0x020915, veil: 'rgba(10,42,48,0.6)' },
+            sunset: { hues: [0.02, 0.05, 0.09, 0.14, 0.92, 0.98, 0.11], bgColor: 0x150806, veil: 'rgba(72,24,12,0.6)' },
+            mono: { hues: [0.0, 0.02, 0.04, 0.08, 0.14, 0.18, 0.22], bgColor: 0x06070a, veil: 'rgba(18,18,24,0.6)' },
+            acid: { hues: [0.2, 0.25, 0.3, 0.33, 0.36, 0.42, 0.45], bgColor: 0x07110b, veil: 'rgba(18,60,20,0.6)' }
         };
         this.currentPalette = 'neon';
+        this.backgroundImage = null;
         this.backgroundTexture = null;
+        this.backgroundPlane = null;
+        this.backgroundVeil = null;
         this.shapeStyles = {
             spikey: { displacement: 1.35, morph: 2.5, scale: 1.05, opacity: 1.0, wobble: 2.0, jitter: 0.85, shade: 0.10 },
             fluid: { displacement: 0.72, morph: 1.0, scale: 0.85, opacity: 0.68, wobble: 0.75, jitter: 0.18, shade: 0.04 },
@@ -53,7 +61,7 @@ export class Visualizer {
             this.currentPalette = name;
 
             const hasBackgroundImage = !!this.backgroundTexture;
-            this.renderer.setClearColor(palette.bgColor, hasBackgroundImage ? 0 : 1);
+            this.renderer.setClearColor(palette.bgColor, 1);
             this.scene.fog.color.setHex(palette.bgColor);
             
             // Reassign hues per shape pool to map pitch -> palette logic
@@ -67,8 +75,8 @@ export class Visualizer {
                 });
             });
             // If a background image is currently applied via CSS, update the veil color
-            if (hasBackgroundImage && this.canvas && this.canvas.style) {
-                this._applyVeilStyle(this.backgroundTexture.src);
+            if (hasBackgroundImage) {
+                this._applyBackgroundLayers();
             }
         }
     }
@@ -83,6 +91,12 @@ export class Visualizer {
         this.camera.aspect = width / height;
         this.camera.updateProjectionMatrix();
         this.renderer.setSize(width, height);
+        this.backgroundCamera.left = -(width / height);
+        this.backgroundCamera.right = width / height;
+        this.backgroundCamera.top = 1;
+        this.backgroundCamera.bottom = -1;
+        this.backgroundCamera.updateProjectionMatrix();
+        this._updateBackgroundScale();
         
         const isMobile = width < height;
         
@@ -356,51 +370,141 @@ export class Visualizer {
             });
         });
 
+        this.renderer.clear();
+        if (this.backgroundTexture) {
+            this.renderer.render(this.backgroundScene, this.backgroundCamera);
+        }
         this.renderer.render(this.scene, this.camera);
     }
 
     // Set a background from an HTMLImageElement. Places it behind the scene.
     setBackgroundImage(image) {
         if (!image) return;
-        // Use the canvas element's CSS background for a true "cover" behavior
-        // and make the WebGL canvas transparent so the CSS background shows through.
-        try {
-            this.backgroundTexture = image;
-            this._applyVeilStyle(image.src);
 
-            // Make renderer clear transparent so CSS background + veil are visible.
-            this.renderer.setClearColor(0x000000, 0);
-        } catch (e) {
-            console.warn('Failed to apply CSS background cover:', e);
+        this.backgroundImage = image;
+
+        if (this.backgroundTexture) {
+            this.backgroundTexture.dispose();
+        }
+
+        this.backgroundTexture = new THREE.Texture(image);
+        this.backgroundTexture.needsUpdate = true;
+        this.backgroundTexture.colorSpace = THREE.SRGBColorSpace;
+        this.backgroundTexture.minFilter = THREE.LinearFilter;
+        this.backgroundTexture.magFilter = THREE.LinearFilter;
+        this.backgroundTexture.generateMipmaps = false;
+
+        this._ensureBackgroundLayers();
+        this._applyBackgroundLayers();
+    }
+
+    _ensureBackgroundLayers() {
+        if (!this.backgroundPlane) {
+            const geometry = new THREE.PlaneGeometry(2, 2);
+            const material = new THREE.MeshBasicMaterial({
+                map: this.backgroundTexture,
+                transparent: false,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                depthTest: false
+            });
+            this.backgroundPlane = new THREE.Mesh(geometry, material);
+            this.backgroundPlane.renderOrder = -20;
+            this.backgroundScene.add(this.backgroundPlane);
+        }
+
+        if (!this.backgroundVeil) {
+            const geometry = new THREE.PlaneGeometry(2, 2);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.5,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                depthTest: false
+            });
+            this.backgroundVeil = new THREE.Mesh(geometry, material);
+            this.backgroundVeil.renderOrder = -19;
+            this.backgroundScene.add(this.backgroundVeil);
         }
     }
 
-    _applyVeilStyle(imageSrc) {
-        if (!this.canvas || !this.canvas.style) return;
+    _applyBackgroundLayers() {
+        if (!this.backgroundTexture) return;
+
+        if (this.backgroundPlane) {
+            this.backgroundPlane.visible = true;
+        }
+
+        if (this.backgroundVeil) {
+            this.backgroundVeil.visible = true;
+        }
+
         const palette = this.palettes[this.currentPalette];
         const veil = (palette && palette.veil) || 'rgba(0,0,0,0.3)';
-        // Use linear-gradient as a uniform veil over the image. The first layer is the veil.
-        this.canvas.style.backgroundImage = `linear-gradient(${veil}, ${veil}), url(${imageSrc})`;
-        this.canvas.style.backgroundSize = 'cover';
-        this.canvas.style.backgroundPosition = 'center center';
-        this.canvas.style.backgroundRepeat = 'no-repeat';
+        const match = veil.match(/rgba?\(([^)]+)\)/i);
+        const parts = match ? match[1].split(',').map(part => parseFloat(part.trim())) : [0, 0, 0, 0.3];
+
+        if (this.backgroundVeil && this.backgroundVeil.material) {
+            const color = new THREE.Color(
+                Math.max(0, Math.min(1, (parts[0] || 0) / 255)),
+                Math.max(0, Math.min(1, (parts[1] || 0) / 255)),
+                Math.max(0, Math.min(1, (parts[2] || 0) / 255))
+            );
+            this.backgroundVeil.material.color = color;
+            this.backgroundVeil.material.opacity = parts.length > 3 ? parts[3] : 0.3;
+        }
+
+        if (this.backgroundPlane && this.backgroundPlane.material) {
+            this.backgroundPlane.material.map = this.backgroundTexture;
+            this.backgroundPlane.material.map.wrapS = THREE.ClampToEdgeWrapping;
+            this.backgroundPlane.material.map.wrapT = THREE.ClampToEdgeWrapping;
+            this.backgroundPlane.material.map.repeat.set(1, 1);
+            this.backgroundPlane.material.map.offset.set(0, 0);
+            this.backgroundPlane.material.needsUpdate = true;
+        }
+
+        this._updateBackgroundScale();
+    }
+
+    _updateBackgroundScale() {
+        if (!this.backgroundImage || !this.backgroundPlane || !this.backgroundVeil) return;
+
+        const viewportAspect = this.camera.aspect;
+        const imageAspect = this.backgroundImage.width / this.backgroundImage.height;
+
+        // Base scale to fill ortho camera bounds (2x2 plane fills 2*aspect x 2 viewport)
+        let scaleX = viewportAspect;
+        let scaleY = 1;
+
+        // Apply cover scaling on top
+        if (imageAspect > viewportAspect) {
+            scaleX *= imageAspect / viewportAspect;
+        } else {
+            scaleY *= viewportAspect / imageAspect;
+        }
+
+        this.backgroundPlane.scale.set(scaleX, scaleY, 1);
+        this.backgroundVeil.scale.set(scaleX, scaleY, 1);
     }
 
     // Clear any background image and restore palette-based background
     clearBackground() {
-        // Remove CSS background and restore WebGL clear color
-        try {
-            if (this.canvas && this.canvas.style) {
-                this.canvas.style.backgroundImage = '';
-                this.canvas.style.backgroundSize = '';
-                this.canvas.style.backgroundPosition = '';
-                this.canvas.style.backgroundRepeat = '';
-            }
-        } catch (e) {
-            console.warn('Failed to clear CSS background:', e);
+        if (this.backgroundTexture) {
+            this.backgroundTexture.dispose();
+            this.backgroundTexture = null;
         }
 
-        this.backgroundTexture = null;
+        this.backgroundImage = null;
+
+        if (this.backgroundPlane) {
+            this.backgroundPlane.visible = false;
+        }
+
+        if (this.backgroundVeil) {
+            this.backgroundVeil.visible = false;
+        }
+
         // Reset clear color and fog to match current palette (opaque)
         this.setPalette(this.currentPalette);
     }
